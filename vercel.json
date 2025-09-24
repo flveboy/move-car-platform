@@ -6,8 +6,8 @@
       "use": "@vercel/node"
     },
     {
-      "src": "public/**/*",  // 处理 public 目录下的所有静态文件
-      "use": "@vercel/static"  // 使用静态资源构建器
+      "src": "public/**/*",
+      "use": "@vercel/static"
     }
   ],
   "routes": [
@@ -16,11 +16,11 @@
       "dest": "/functions/api/$1"
     },
     {
-      "src": "/(.*)",  // 其他所有路径指向 public 目录下的对应文件
+      "src": "/(.*)",
       "dest": "/public/$1"
     },
     {
-      "src": "/",  // 根路径默认指向 index.html
+      "src": "/",
       "dest": "/public/index.html"
     }
   ]
