@@ -1,7 +1,14 @@
 export async function onRequest(context) {
   try {
-    // 从环境变量获取reqId
-    const validReqId = context.env.VALID_REQ_ID;
+    // 兼容Vercel（process.env）和Cloudflare/Netlify（context.env）
+    let validReqId;
+    if (typeof process !== 'undefined' && process.env) {
+      // Vercel环境
+      validReqId = process.env.VALID_REQ_ID;
+    } else {
+      // Cloudflare Workers和Netlify环境
+      validReqId = context.env.VALID_REQ_ID;
+    }
     
     if (!validReqId) {
       return new Response(JSON.stringify({ 
@@ -19,7 +26,8 @@ export async function onRequest(context) {
       status: 200,
       headers: { 
         'Content-Type': 'application/json',
-        'Cache-Control': 'no-store' // 防止缓存
+        'Cache-Control': 'no-store', // 防止缓存
+        'Access-Control-Allow-Origin': '*' // 允许跨域
       } 
     });
   } catch (error) {
@@ -27,7 +35,10 @@ export async function onRequest(context) {
       error: "服务器内部错误" 
     }), { 
       status: 500,
-      headers: { 'Content-Type': 'application/json' } 
+      headers: { 
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*'
+      } 
     });
   }
 }
