@@ -5,12 +5,5 @@
   ],
   "routes": [
     { "src": "/api/(.*)", "dest": "functions/api/$1.js" }
-  ],
-  
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/functions/api/$1"
-    }
   ]
 }
