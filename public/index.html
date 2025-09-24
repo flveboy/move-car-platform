@@ -638,10 +638,12 @@
             }
 
             try {
-                const endpoint = notificationType === 'dingtalk' 
-                    ? '/api/dingtalk-notification' 
-                    : '/api/wecom-notification';
+                // const endpoint = notificationType === 'dingtalk' 
+                //     ? '/api/dingtalk-notification' 
+                //     : '/api/wecom-notification';
                 
+                const endpoint ='/api/notification';
+                    
                 const response = await fetch(endpoint, {
                     method: 'POST',
                     headers: {
@@ -649,7 +651,8 @@
                     },
                     body: JSON.stringify({ 
                         message,
-                        requestTime: Date.now() // 添加请求时间戳
+                        requestTime: Date.now(), // 添加请求时间戳
+                         type: notificationType
                     })
                 });
                 
