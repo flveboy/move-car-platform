@@ -4,9 +4,14 @@
   "description": "A web app for notifying car owners to move their vehicles",
   "scripts": {
     "dev": "wrangler pages dev public --local",
-    "deploy": "wrangler pages publish public"
+    "deploy": "wrangler pages publish public",
+    "vercel-dev": "vercel dev"
+  },
+  "dependencies": {
+    "node-fetch": "^2.6.7"
   },
   "devDependencies": {
-    "wrangler": "^3.0.0"
+    "wrangler": "^3.0.0",
+    "vercel": "^32.4.1"
   }
 }
