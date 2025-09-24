@@ -1,7 +1,7 @@
 {
   "functions": {
     "functions/api/**/*.js": {
-      "runtime": "nodejs18.x"
+      "runtime": "nodejs18.x@18.18.0"
     }
   },
   "rewrites": [
