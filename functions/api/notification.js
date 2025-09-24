@@ -1,15 +1,28 @@
-// 平台识别与环境变量适配
-const platform = process.env.DEPLOY_PLATFORM || 
-  (typeof NETLIFY === 'undefined' ? null : 'netlify') ||
-  'cloudflare';
+// 多平台兼容的通知API
+// 支持 Vercel、Netlify、Cloudflare
+
+// 平台检测
+const isVercel = typeof process !== 'undefined' && process.env.VERCEL;
+const isNetlify = typeof NETLIFY !== 'undefined';
+const isCloudflare = typeof Request !== 'undefined' && typeof Response !== 'undefined' && !isVercel && !isNetlify;
 
 // 工具函数：统一请求解析
 async function parseRequest(request) {
   try {
-    const method = request.method || request.httpMethod;
-    const body = method === 'POST' 
-      ? (request.body ? JSON.parse(request.body) : await request.json())
-      : {};
+    let method, body;
+    
+    if (isVercel) {
+      // Vercel 环境
+      method = request.method;
+      body = request.body;
+    } else {
+      // Netlify/Cloudflare 环境
+      method = request.method || request.httpMethod;
+      body = method === 'POST' 
+        ? (request.body ? JSON.parse(request.body) : await request.json())
+        : {};
+    }
+    
     return { method, body };
   } catch (e) {
     return { error: '无效的请求体' };
@@ -27,13 +40,13 @@ function createResponse(data, status = 200) {
   const body = JSON.stringify(data);
   
   // 不同平台的响应格式
-  if (platform === 'vercel') {
+  if (isVercel) {
     return {
       statusCode: status,
       headers: corsHeaders,
       body
     };
-  } else if (platform === 'netlify') {
+  } else if (isNetlify) {
     return {
       statusCode: status,
       headers: corsHeaders,
@@ -49,7 +62,7 @@ function createResponse(data, status = 200) {
 
 // 签名生成（兼容Node.js环境）
 async function generateDingtalkSignature(timestamp, secret) {
-  if (platform === 'cloudflare') {
+  if (isCloudflare) {
     // Cloudflare Workers环境
     const encoder = new TextEncoder();
     const key = await crypto.subtle.importKey(
@@ -115,7 +128,8 @@ async function handleNotification(body, env) {
       }
 
       // 发送请求
-      const response = await (platform === 'cloudflare' ? fetch : (await import('node-fetch')).default)(
+      const fetchModule = isCloudflare ? fetch : (await import('node-fetch')).default;
+      const response = await fetchModule(
         signedUrl,
         {
           method: 'POST',
@@ -147,7 +161,8 @@ async function handleNotification(body, env) {
       }
 
       // 发送请求
-      const response = await (platform === 'cloudflare' ? fetch : (await import('node-fetch')).default)(
+      const fetchModule = isCloudflare ? fetch : (await import('node-fetch')).default;
+      const response = await fetchModule(
         webhook,
         {
           method: 'POST',
@@ -179,51 +194,84 @@ async function handleNotification(body, env) {
   }
 }
 
-// 平台适配出口
-if (platform === 'vercel') {
-  // Vercel 适配
-  export default async (req, res) => {
+// Vercel 处理器
+async function vercelHandler(req, res) {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
+
+  try {
     const { method, body, error } = await parseRequest(req);
     
     if (error) {
       return res.status(400).json({ error });
     }
     
-    if (method === 'OPTIONS') {
-      return res.status(200).setHeader('Access-Control-Allow-Origin', '*').end();
+    if (method !== 'POST') {
+      return res.status(405).json({ error: 'Method not allowed' });
     }
     
     const result = await handleNotification(body, process.env);
-    res.status(result.statusCode).set(result.headers).send(result.body);
-  };
-} else if (platform === 'netlify') {
-  // Netlify 适配
-  exports.handler = async (event) => {
-    const { method, body, error } = await parseRequest(event);
     
-    if (error) {
-      return createResponse({ error }, 400);
-    }
+    // Set CORS headers
+    Object.keys(result.headers).forEach(key => {
+      res.setHeader(key, result.headers[key]);
+    });
     
-    if (method === 'OPTIONS') {
-      return createResponse(null, 200);
-    }
-    
-    return handleNotification(body, process.env);
-  };
+    return res.status(result.statusCode).send(JSON.parse(result.body));
+  } catch (error) {
+    console.error('Error in notification:', error);
+    return res.status(500).json({
+      error: '服务器内部错误',
+      detail: error.message
+    });
+  }
+}
+
+// Netlify 处理器
+async function netlifyHandler(event) {
+  const { method, body, error } = await parseRequest(event);
+  
+  if (error) {
+    return createResponse({ error }, 400);
+  }
+  
+  if (method === 'OPTIONS') {
+    return createResponse(null, 200);
+  }
+  
+  return handleNotification(body, process.env);
+}
+
+// Cloudflare 处理器
+async function cloudflareHandler(context) {
+  const { method, body, error } = await parseRequest(context.request);
+  
+  if (error) {
+    return createResponse({ error }, 400);
+  }
+  
+  if (method === 'OPTIONS') {
+    return createResponse(null, 200);
+  }
+  
+  return handleNotification(body, context.env);
+}
+
+// 根据平台导出不同的处理器
+if (isVercel) {
+  // Vercel 导出
+  export default vercelHandler;
+} else if (isNetlify) {
+  // Netlify 导出
+  exports.handler = netlifyHandler;
 } else {
-  // Cloudflare Workers 适配
+  // Cloudflare 导出
   export async function onRequest(context) {
-    const { method, body, error } = await parseRequest(context.request);
-    
-    if (error) {
-      return createResponse({ error }, 400);
-    }
-    
-    if (method === 'OPTIONS') {
-      return createResponse(null, 200);
-    }
-    
-    return handleNotification(body, context.env);
+    return cloudflareHandler(context);
   }
 }
