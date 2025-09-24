@@ -6,11 +6,7 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "functions/api/$1.js" }
   ],
-  "functions": {
-    "functions/api/*.js": {
-      "runtime": "nodejs18.x@18.18.0"
-    }
-  },
+  
   "rewrites": [
     {
       "source": "/api/(.*)",
