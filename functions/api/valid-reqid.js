@@ -1,10 +1,10 @@
 // 多平台兼容的验证ID API
 // 支持 Vercel、Netlify、Cloudflare
 
-// 平台检测
-const isVercel = typeof process !== 'undefined' && process.env.VERCEL;
-const isNetlify = typeof NETLIFY !== 'undefined';
-const isCloudflare = typeof Request !== 'undefined' && typeof Response !== 'undefined' && !isVercel && !isNetlify;
+// 通过环境变量 DEPLOY_PLATFORM 检测平台
+const platform = process.env.DEPLOY_PLATFORM || 
+  (typeof NETLIFY !== 'undefined' ? 'netlify' : 
+   typeof Request !== 'undefined' && typeof Response !== 'undefined' ? 'cloudflare' : 'unknown');
 
 // Vercel 处理器
 async function vercelHandler(req, res) {
@@ -58,17 +58,20 @@ async function universalHandler(env, request) {
 }
 
 // 根据平台导出不同的处理器
-if (isVercel) {
+if (platform === 'vercel') {
   // Vercel 导出
   export default vercelHandler;
-} else if (isNetlify) {
+} else if (platform === 'netlify') {
   // Netlify 导出
   exports.handler = async (event) => {
     return universalHandler(process.env, event);
   };
-} else {
+} else if (platform === 'cloudflare') {
   // Cloudflare 导出
   export async function onRequest(context) {
     return universalHandler(context.env, context.request);
-  }
+  };
+} else {
+  // 未知平台，默认使用 Vercel 格式
+  export default vercelHandler;
 }
