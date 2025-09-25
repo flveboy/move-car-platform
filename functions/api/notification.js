@@ -52,7 +52,7 @@ async function handleNotification(body, env) {
   const { message, type = 'dingtalk' } = body;
   if (!message) return createResponse({ error: '消息内容不能为空' }, 400);
 
-  const content = `🚗 挪车通知\n\n通知内容：${message}\n\n通知时间：${new Date().toLocaleString('zh-CN')}\n\n请及时处理挪车请求！`;
+  const content = `🚗 挪车通知\n\n通知内容：${message}\n\n通知时间：${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}\n\n请及时处理挪车请求！`;
 
   try {
     const fetch = (await import('node-fetch')).default;
