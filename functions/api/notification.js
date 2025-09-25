@@ -1,5 +1,6 @@
 // 多平台兼容通知API
 // 支持 Vercel、Netlify、Cloudflare
+// 钉钉 + 企业微信
 
 const platform = (() => {
   const p = process.env.DEPLOY_PLATFORM;
@@ -31,7 +32,6 @@ async function parseRequest(req) {
     if (platform === 'vercel') {
       return { method: req.method, body: req.body };
     }
-    // Netlify / Cloudflare
     const body = req.body ? JSON.parse(req.body) : await req.json();
     return { method: req.method || req.httpMethod, body };
   } catch {
@@ -39,7 +39,7 @@ async function parseRequest(req) {
   }
 }
 
-// 工具函数：生成钉钉签名（Node.js）
+// 工具函数：钉钉签名
 async function generateDingtalkSignature(timestamp, secret) {
   const crypto = require('crypto');
   const hmac = crypto.createHmac('sha256', secret);
@@ -55,6 +55,8 @@ async function handleNotification(body, env) {
   const content = `🚗 挪车通知\n\n通知内容：${message}\n\n通知时间：${new Date().toLocaleString('zh-CN')}\n\n请及时处理挪车请求！`;
 
   try {
+    const fetch = (await import('node-fetch')).default;
+
     if (type === 'dingtalk') {
       const webhook = env.DINGTALK_WEBHOOK;
       const secret = env.DINGTALK_SECRET;
@@ -67,7 +69,6 @@ async function handleNotification(body, env) {
         url += `&timestamp=${ts}&sign=${encodeURIComponent(sign)}`;
       }
 
-      const fetch = (await import('node-fetch')).default;
       const rsp = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -75,7 +76,22 @@ async function handleNotification(body, env) {
       });
       const data = await rsp.json();
       if (data.errcode === 0) return createResponse({ success: true, message: '钉钉通知发送成功' });
-      return createResponse({ error: '发送失败', detail: data.errmsg }, 500);
+      return createResponse({ error: '钉钉发送失败', detail: data.errmsg }, 500);
+    }
+
+    // ✅ 企业微信通知
+    if (type === 'wecom') {
+      const webhook = env.WECOM_WEBHOOK;
+      if (!webhook) return createResponse({ error: '企业微信Webhook未配置' }, 500);
+
+      const rsp = await fetch(webhook, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ msgtype: 'text', text: { content } }),
+      });
+      const data = await rsp.json();
+      if (data.errcode === 0) return createResponse({ success: true, message: '企业微信通知发送成功' });
+      return createResponse({ error: '企业微信发送失败', detail: data.errmsg }, 500);
     }
 
     return createResponse({ error: '未知通知类型' }, 400);
@@ -115,15 +131,13 @@ async function cloudflareHandler(context) {
   return handleNotification(body, context.env);
 }
 
-// ✅ CommonJS 导出
+// CommonJS 导出
 if (platform === 'netlify') {
   exports.handler = netlifyHandler;
 } else if (platform === 'cloudflare') {
-  // Cloudflare Workers 入口
   addEventListener('fetch', event => {
     event.respondWith(cloudflareHandler({ request: event.request, env: {} }));
   });
 } else {
-  // Vercel 默认
   module.exports = vercelHandler;
 }
